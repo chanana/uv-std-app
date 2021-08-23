@@ -1,6 +1,7 @@
 from scipy.signal import find_peaks, peak_widths
 import pandas as pd
 
+
 def find_peaks_scipy(x, height=None):
     """Find peaks in given 1D vector
 
@@ -23,6 +24,5 @@ def find_peaks_scipy(x, height=None):
 
 
 def make_peak_metadata_table(peaks, fwhm, hm, leftips, rightips):
-    df = pd.DataFrame(columns=['peaks','fwhm','hm', 'leftips', 'rightips'])
-    
-    
+    # df = pd.DataFrame(columns=["peaks", "fwhm", "hm", "leftips", "rightips"])
+    pass
