@@ -1,7 +1,7 @@
 from scipy.signal import find_peaks, peak_widths
+import pandas as pd
 
-
-def find_peaks(x, height=None):
+def find_peaks_scipy(x, height=None):
     """Find peaks in given 1D vector
 
     Args:
@@ -10,7 +10,7 @@ def find_peaks(x, height=None):
         peak. If no height is specified, it is taken as 10% of the maximum value in x.
         Defaults to None.
     """
-    if not height:
+    if height is None:
         height = 0.1 * max(x)
 
     peaks, heights = find_peaks(x=x, height=height)
@@ -19,4 +19,10 @@ def find_peaks(x, height=None):
     # leftips, rightips = intersection on x axis for y=hm
     fwhm, hm, leftips, rightips = peak_widths(x=x, peaks=peaks, rel_height=0.5)
 
-    return {"fwhm": fwhm, "hm": hm, "leftips": leftips, "rightips": rightips}
+    return peaks, fwhm, hm, leftips, rightips
+
+
+def make_peak_metadata_table(peaks, fwhm, hm, leftips, rightips):
+    df = pd.DataFrame(columns=['peaks','fwhm','hm', 'leftips', 'rightips'])
+    
+    
