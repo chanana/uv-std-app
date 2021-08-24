@@ -1,90 +1,69 @@
-import dash
-import dash_html_components as html
-import dash_core_components as dcc
 import base64
-import json
 import datetime
-from functions import find_peaks_scipy
-import plotly.graph_objects as go
-import numpy as np
+import json
 
+import dash
+import dash_bootstrap_components as dbc
+import dash_core_components as dcc
+import dash_html_components as html
+import numpy as np
+import plotly.graph_objects as go
 from dash.dependencies import Input, Output, State
 
-external_stylesheets = ["https://codepen.io/chriddyp/pen/bWLwgP.css"]
+from functions import find_peaks_scipy
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO])
+upload_card = dbc.Card([
+    dcc.Upload(id="upload-data",
+               children=["Drag and Drop or ", html.A("Select a File"),
+                         " to use as a reference file.",],
+               multiple=False,
+               )
+], body=True)
+information_card = dbc.Card(id='output-data-upload', children=[],)
 
-app.layout = html.Div(
-    [
-        dcc.Tabs(
-            id="tabs-example",
-            value="tab-1",
-            children=[
-                dcc.Tab(
-                    label="Starting parameters",
-                    value="tab-1",
-                    children=[
-                        dcc.Upload(
-                            id="upload-data",
-                            children=html.Div(
-                                [
-                                    "Drag and Drop or ",
-                                    html.A("Select a File"),
-                                    " to use as a reference file.",
-                                ]
-                            ),
-                            style={
-                                "width": "100%",
-                                "height": "60px",
-                                "lineHeight": "60px",
-                                "borderWidth": "1px",
-                                "borderStyle": "dashed",
-                                "borderRadius": "5px",
-                                "textAlign": "center",
-                            },
-                            multiple=False,
-                        ),
-                        html.Div(id="output-data-upload"),
-                        html.Div(
-                            [
-                                html.H3(
-                                    "Uploaded Data",
-                                    style={"text-align": "center"},
-                                ),
-                                dcc.Graph(id="spectrum-original"),
-                            ]
-                        ),
-                    ],
-                ),
-                dcc.Tab(
-                    label="Analysis",
-                    value="tab-2",
-                    children=[
-                        dcc.Upload(
-                            id="upload-data-multiple",
-                            children=html.Div(
-                                [
-                                    "Add ",
-                                    html.A("sample files"),
-                                    " to compare with the reference.",
-                                ]
-                            ),
-                            style={
-                                "width": "100%",
-                                "height": "60px",
-                                "lineHeight": "60px",
-                                "borderWidth": "1px",
-                                "borderStyle": "dashed",
-                                "borderRadius": "5px",
-                                "textAlign": "center",
-                            },
-                            multiple=True,
-                        ),
-                        html.Div(id="output-data-upload-multiple"),
-                    ],
-                ),
-            ],
+# column 1 - upload card and information card
+# column 2 - title and graph
+tab1 = dbc.Tab(
+    label="Starting parameters",
+    id="tab-1",
+    children=[
+        dbc.Row([
+            dbc.Col([upload_card, information_card], width=3),
+            dbc.Col([dcc.Graph(id="spectrum-original")], width=9)
+        ])
+    ],
+)
+tab2 = dcc.Tab(
+    label="Analysis",
+    value="tab-2",
+    children=[
+        dcc.Upload(
+            id="upload-data-multiple",
+            children=html.Div(
+                [
+                    "Add ",
+                    html.A("sample files"),
+                    " to compare with the reference.",
+                ]
+            ),
+            style={
+                "width": "100%",
+                "height": "60px",
+                "lineHeight": "60px",
+                "borderWidth": "1px",
+                "borderStyle": "dashed",
+                "borderRadius": "5px",
+                "textAlign": "center",
+            },
+            multiple=True,
         ),
+        html.Div(id="output-data-upload-multiple"),
+    ],
+)
+app.layout = dbc.Container(
+    [
+        dcc.Tabs(id="tabs-example", value="tab-1", children=[tab1, tab2]),
         html.Div(id="tabs-example-content"),
     ]
 )
@@ -104,13 +83,16 @@ def make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips):
     for i in range(len(hm)):
         fig.add_trace(
             go.Scatter(
-                x=x[leftips[i] : rightips[i]],
+                x=x[leftips[i]: rightips[i]],
                 y=[hm[i]] * fwhm[i],
                 mode="lines",
                 name="peak" + str(i),
             )
         )
     return fig
+
+
+# def make_graph_output():
 
 
 @app.callback(
@@ -159,12 +141,7 @@ def update_output_tab_1(contents, filename, last_modified):
 )
 def update_output_tab_2(list_of_contents, list_of_filenames, list_of_last_modified):
     if list_of_contents is not None:
-        children = [
-            parse_contents(c, n, d)
-            for c, n, d in zip(
-                list_of_contents, list_of_filenames, list_of_last_modified
-            )
-        ]
+        children = [parse_contents(c) for c in list_of_contents]
         return children
 
 
