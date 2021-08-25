@@ -5,6 +5,7 @@ import dash
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_table
 import numpy as np
 import plotly.graph_objects as go
 from dash.dependencies import Input, Output, State
@@ -14,7 +15,7 @@ from functions import find_peaks_scipy
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 tab1 = dbc.Tab(
-    label="Starting parameters",
+    label="Reference File",
     id="tab-1",
     children=[
         dbc.Row(
@@ -42,11 +43,12 @@ tab1 = dbc.Tab(
             align="center",
         ),
         html.Div(id="reference-row"),
+        dcc.Store(id="peak-dataframe"),
     ],
 )
 
 tab2 = dcc.Tab(
-    label="Analysis",
+    label="Sample Files",
     id="tab-2",
     children=[
         dbc.Row(
@@ -76,9 +78,26 @@ tab2 = dcc.Tab(
         html.Div(id="samples-uploaded"),
     ],
 )
+
+tab3 = dcc.Tab(
+    label="Comparison",
+    id="tab-3",
+    children=[
+        dbc.Row(
+            dbc.Col(
+                dash_table.DataTable(
+                    id="peak-table",
+                    columns=[
+                        {"name": i, "id": i} for i in ["Peak #", "Height", "Position", "FWHM"]
+                    ],
+                )
+            )
+        )
+    ],
+)
 app.layout = dbc.Container(
     [
-        dcc.Tabs(id="tabs-example", value="tab-1", children=[tab1, tab2]),
+        dcc.Tabs(id="tabs-example", value="tab-1", children=[tab1, tab2, tab3]),
         html.Div(id="tabs-example-content"),
     ]
 )
