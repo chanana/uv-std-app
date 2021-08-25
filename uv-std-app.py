@@ -7,6 +7,7 @@ import dash_core_components as dcc
 import dash_html_components as html
 import dash_table
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 from dash.dependencies import Input, Output, State
 
@@ -43,7 +44,7 @@ tab1 = dbc.Tab(
             align="center",
         ),
         html.Div(id="reference-row"),
-        dcc.Store(id="peak-dataframe"),
+        dcc.Store(id="peak-tables"),
     ],
 )
 
@@ -88,19 +89,15 @@ tab3 = dcc.Tab(
                 dash_table.DataTable(
                     id="peak-table",
                     columns=[
-                        {"name": i, "id": i} for i in ["Peak #", "Height", "Position", "FWHM"]
+                        {"name": i, "id": i}
+                        for i in ["Peak #", "Height", "Position", "FWHM"]
                     ],
                 )
             )
         )
     ],
 )
-app.layout = dbc.Container(
-    [
-        dcc.Tabs(id="tabs-example", value="tab-1", children=[tab1, tab2, tab3]),
-        html.Div(id="tabs-example-content"),
-    ]
-)
+app.layout = dbc.Container(dcc.Tabs(value="tab-1", children=[tab1, tab2, tab3]))
 
 
 def parse_contents(contents):
@@ -120,7 +117,7 @@ def make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips):
                 x=x[leftips[i] : rightips[i]],
                 y=[hm[i]] * fwhm[i],
                 mode="lines",
-                name="peak" + str(i),
+                name="peak" + str(i+1),
             )
         )
     return fig
@@ -139,11 +136,20 @@ def make_sample_info_card(sample_info, filename):
     return info_card
 
 
-def put_contents_into_html(content, filename, width_col_1=3, width_col_2=9):
+def make_data_table(peaks, heights, fwhm):
+    df = pd.DataFrame()
+    df['Parameter'] = ["Position", "Height", "FWHM"]
+    for i in range(len(peaks)):
+        df["Peak " + str(i + 1)] = [peaks[i] / 10., heights[i], fwhm[i]]
+
+    return df
+
+
+def get_file_contents_and_analyze(content, filename):
     j = parse_contents(content)
     x = np.array(j["time"][:6000])
     y = np.array(j["intensities"]["254"][:6000])
-    peaks, fwhm, hm, leftips, rightips = find_peaks_scipy(y)
+    peaks, heights, fwhm, hm, leftips, rightips = find_peaks_scipy(y)
 
     fwhm = np.array(np.floor(fwhm), dtype=int)
     leftips = np.array(np.floor(leftips), dtype=int)
@@ -151,10 +157,27 @@ def put_contents_into_html(content, filename, width_col_1=3, width_col_2=9):
 
     fig = make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips)
     info_card = make_sample_info_card(sample_info=j, filename=filename)
-    col1 = dbc.Col(info_card, width=width_col_1)
-    col2 = dbc.Col(dcc.Graph(figure=fig), width=width_col_2)
+    data_table = make_data_table(peaks, heights, fwhm)
 
-    return dbc.Row(children=[col1, col2], align="center")
+    return info_card, fig, data_table
+
+
+def put_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
+    col1 = dbc.Col(info_card, width=width_col_1)
+    col2 = dbc.Col(dcc.Graph(figure=figure), width=width_col_2)
+    row1 = dbc.Row(children=[col1, col2], align="center")
+    row2 = dbc.Row(
+        dbc.Col(
+            dash_table.DataTable(
+                columns=[{"name": i, "id": i} for i in data_table.columns],
+                data=data_table.to_dict('records'),
+            ),
+            width=12,
+        ),
+        align="center",
+    )
+
+    return [row1, row2]
 
 
 @app.callback(
@@ -164,7 +187,8 @@ def put_contents_into_html(content, filename, width_col_1=3, width_col_2=9):
 )
 def update_output_tab_1(contents, filename):
     if contents is not None:
-        return put_contents_into_html(contents, filename)
+        info_card, fig, data_table = get_file_contents_and_analyze(contents, filename)
+        return put_into_html(info_card, fig, data_table)
 
 
 @app.callback(
@@ -176,7 +200,8 @@ def update_output_tab_2(contents: list, filename: list) -> list:
     if contents is not None:
         children = []
         for content, f in zip(contents, filename):
-            children.append(put_contents_into_html(content, f))
+            info_card, fig, data_table = get_file_contents_and_analyze(content, f)
+            children += put_into_html(info_card, fig, data_table)
 
         return children
 
