@@ -53,6 +53,7 @@ tab2 = dcc.Tab(
             dbc.Col(
                 dcc.Upload(
                     id="upload-data-multiple",
+                    multiple=True,
                     children=html.Div(
                         [
                             "Add ",
@@ -69,11 +70,10 @@ tab2 = dcc.Tab(
                         "borderRadius": "5px",
                         "textAlign": "center",
                     },
-                    multiple=True,
                 ),
             )
         ),
-        html.Div(id="output-data-upload-multiple"),
+        html.Div(id="samples-uploaded"),
     ],
 )
 app.layout = dbc.Container(
@@ -107,10 +107,9 @@ def make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips):
     return fig
 
 
-def make_sample_info_card(element_id, sample_info, filename):
+def make_sample_info_card(sample_info, filename):
     info_card = dbc.Card(
         dbc.CardBody(
-            id=element_id,
             children=[html.P(filename)]
             + [
                 html.P([html.B(i), ": ", sample_info[i]])
@@ -121,9 +120,20 @@ def make_sample_info_card(element_id, sample_info, filename):
     return info_card
 
 
-def make_fig_and_info_columns(info_card, figure, width_col_1=3, width_col_2=9):
+def put_contents_into_html(content, filename, width_col_1=3, width_col_2=9):
+    j = parse_contents(content)
+    x = np.array(j["time"][:6000])
+    y = np.array(j["intensities"]["254"][:6000])
+    peaks, fwhm, hm, leftips, rightips = find_peaks_scipy(y)
+
+    fwhm = np.array(np.floor(fwhm), dtype=int)
+    leftips = np.array(np.floor(leftips), dtype=int)
+    rightips = np.array(np.floor(rightips), dtype=int)
+
+    fig = make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips)
+    info_card = make_sample_info_card(sample_info=j, filename=filename)
     col1 = dbc.Col(info_card, width=width_col_1)
-    col2 = dbc.Col(dcc.Graph(id="reference-fig", figure=figure), width=width_col_2)
+    col2 = dbc.Col(dcc.Graph(id="reference-fig", figure=fig), width=width_col_2)
     return [col1, col2]
 
 
@@ -134,34 +144,21 @@ def make_fig_and_info_columns(info_card, figure, width_col_1=3, width_col_2=9):
 )
 def update_output_tab_1(contents, filename):
     if contents is not None:
-        j = parse_contents(contents)
-        x = np.array(j["time"][:6000])
-        y = np.array(j["intensities"]["254"][:6000])
-        peaks, fwhm, hm, leftips, rightips = find_peaks_scipy(y)
-
-        fwhm = np.array(np.floor(fwhm), dtype=int)
-        leftips = np.array(np.floor(leftips), dtype=int)
-        rightips = np.array(np.floor(rightips), dtype=int)
-
-        fig = make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips)
-        info_card = make_sample_info_card(
-            element_id="reference-file", sample_info=j, filename=filename
-        )
-        return make_fig_and_info_columns(info_card, fig)
-    # else:
-    #     return children
+        return put_contents_into_html(contents, filename)
 
 
-# @app.callback(
-#     Output("output-data-upload-multiple", "children"),
-#     Input("upload-data-multiple", "list_of_contents"),
-#     State("upload-data-multiple", "list_of_filenames"),
-#     State("upload-data-multiple", "list_of_last_modified"),
-# )
-# def update_output_tab_2(list_of_contents, list_of_filenames, list_of_last_modified):
-#     if list_of_contents is not None:
-#         children = [parse_contents(c) for c in list_of_contents]
-#         return children
+@app.callback(
+    Output("samples-uploaded", "children"),
+    Input("upload-data-multiple", "contents"),
+    State("upload-data-multiple", "filename"),
+)
+def update_output_tab_2(contents: list, filename: list) -> list:
+    if contents is not None:
+        children = []
+        for content, f in zip(contents, filename):
+            children += put_contents_into_html(content, f)
+
+        return children
 
 
 if __name__ == "__main__":
