@@ -41,7 +41,7 @@ tab1 = dbc.Tab(
             ),
             align="center",
         ),
-        dbc.Row(id="reference-row", children=[], align="center"),
+        html.Div(id="reference-row"),
     ],
 )
 
@@ -133,8 +133,9 @@ def put_contents_into_html(content, filename, width_col_1=3, width_col_2=9):
     fig = make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips)
     info_card = make_sample_info_card(sample_info=j, filename=filename)
     col1 = dbc.Col(info_card, width=width_col_1)
-    col2 = dbc.Col(dcc.Graph(id="reference-fig", figure=fig), width=width_col_2)
-    return [col1, col2]
+    col2 = dbc.Col(dcc.Graph(figure=fig), width=width_col_2)
+
+    return dbc.Row(children=[col1, col2], align="center")
 
 
 @app.callback(
@@ -156,7 +157,7 @@ def update_output_tab_2(contents: list, filename: list) -> list:
     if contents is not None:
         children = []
         for content, f in zip(contents, filename):
-            children += put_contents_into_html(content, f)
+            children.append(put_contents_into_html(content, f))
 
         return children
 
