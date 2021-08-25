@@ -1,12 +1,11 @@
 from scipy.signal import find_peaks, peak_widths
-import pandas as pd
 
 
 def find_peaks_scipy(x, height=None):
     """Find peaks in given 1D vector
 
     Args:
-        x (list): 1D vector of the y values of a waveform
+        x (numpy.ndarray): 1D vector of the y values of a waveform
         height ([float], optional): The minimum height required to be considered a
         peak. If no height is specified, it is taken as 10% of the maximum value in x.
         Defaults to None.

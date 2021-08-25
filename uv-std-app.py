@@ -1,5 +1,4 @@
 import base64
-import datetime
 import json
 
 import dash
@@ -12,51 +11,67 @@ from dash.dependencies import Input, Output, State
 
 from functions import find_peaks_scipy
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO])
-upload_card = dbc.Card([
-    dcc.Upload(id="upload-data",
-               children=["Drag and Drop or ", html.A("Select a File"),
-                         " to use as a reference file.",],
-               multiple=False,
-               )
-], body=True)
-information_card = dbc.Card(id='output-data-upload', children=[],)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-# column 1 - upload card and information card
-# column 2 - title and graph
 tab1 = dbc.Tab(
     label="Starting parameters",
     id="tab-1",
     children=[
-        dbc.Row([
-            dbc.Col([upload_card, information_card], width=3),
-            dbc.Col([dcc.Graph(id="spectrum-original")], width=9)
-        ])
+        dbc.Row(
+            dbc.Col(
+                dcc.Upload(
+                    id="upload-data",
+                    multiple=False,
+                    children=[
+                        "Drag and Drop or ",
+                        html.A("Select a File"),
+                        " to use as a reference file.",
+                    ],
+                    style={
+                        "width": "100%",
+                        "height": "60px",
+                        "lineHeight": "60px",
+                        "borderWidth": "1px",
+                        "borderStyle": "dashed",
+                        "borderRadius": "5px",
+                        "textAlign": "center",
+                    },
+                ),
+                width=12,
+            ),
+            align="center",
+        ),
+        dbc.Row(id="reference-row", children=[], align="center"),
     ],
 )
+
 tab2 = dcc.Tab(
     label="Analysis",
-    value="tab-2",
+    id="tab-2",
     children=[
-        dcc.Upload(
-            id="upload-data-multiple",
-            children=html.Div(
-                [
-                    "Add ",
-                    html.A("sample files"),
-                    " to compare with the reference.",
-                ]
-            ),
-            style={
-                "width": "100%",
-                "height": "60px",
-                "lineHeight": "60px",
-                "borderWidth": "1px",
-                "borderStyle": "dashed",
-                "borderRadius": "5px",
-                "textAlign": "center",
-            },
-            multiple=True,
+        dbc.Row(
+            dbc.Col(
+                dcc.Upload(
+                    id="upload-data-multiple",
+                    children=html.Div(
+                        [
+                            "Add ",
+                            html.A("sample files"),
+                            " to compare with the reference.",
+                        ]
+                    ),
+                    style={
+                        "width": "100%",
+                        "height": "60px",
+                        "lineHeight": "60px",
+                        "borderWidth": "1px",
+                        "borderStyle": "dashed",
+                        "borderRadius": "5px",
+                        "textAlign": "center",
+                    },
+                    multiple=True,
+                ),
+            )
         ),
         html.Div(id="output-data-upload-multiple"),
     ],
@@ -83,7 +98,7 @@ def make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips):
     for i in range(len(hm)):
         fig.add_trace(
             go.Scatter(
-                x=x[leftips[i]: rightips[i]],
+                x=x[leftips[i] : rightips[i]],
                 y=[hm[i]] * fwhm[i],
                 mode="lines",
                 name="peak" + str(i),
@@ -92,17 +107,32 @@ def make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips):
     return fig
 
 
-# def make_graph_output():
+def make_sample_info_card(element_id, sample_info, filename):
+    info_card = dbc.Card(
+        dbc.CardBody(
+            id=element_id,
+            children=[html.P(filename)]
+            + [
+                html.P([html.B(i), ": ", sample_info[i]])
+                for i in ["Sample Name", "Method Name", "Run Date"]
+            ],
+        )
+    )
+    return info_card
+
+
+def make_fig_and_info_columns(info_card, figure, width_col_1=3, width_col_2=9):
+    col1 = dbc.Col(info_card, width=width_col_1)
+    col2 = dbc.Col(dcc.Graph(id="reference-fig", figure=figure), width=width_col_2)
+    return [col1, col2]
 
 
 @app.callback(
-    Output("output-data-upload", "children"),
-    Output("spectrum-original", "figure"),
+    Output("reference-row", "children"),
     Input("upload-data", "contents"),
     State("upload-data", "filename"),
-    State("upload-data", "last_modified"),
 )
-def update_output_tab_1(contents, filename, last_modified):
+def update_output_tab_1(contents, filename):
     if contents is not None:
         j = parse_contents(contents)
         x = np.array(j["time"][:6000])
@@ -114,35 +144,24 @@ def update_output_tab_1(contents, filename, last_modified):
         rightips = np.array(np.floor(rightips), dtype=int)
 
         fig = make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips)
-
-        return (
-            html.Div(
-                [
-                    html.H5(filename),
-                    html.H6(datetime.datetime.fromtimestamp(last_modified)),
-                    html.H6(j["Sample Name"]),
-                    html.H6(j["Run Name"]),
-                    html.H6(j["Method Name"]),
-                ]
-            ),
-            fig,
+        info_card = make_sample_info_card(
+            element_id="reference-file", sample_info=j, filename=filename
         )
-    else:
-        return html.Div([html.H5("Please enjoy some dummy data!")]), go.Figure(
-            go.Scatter(x=[1, 2, 3], y=[1, 2, 3], mode="lines", name="dummy")
-        )
+        return make_fig_and_info_columns(info_card, fig)
+    # else:
+    #     return children
 
 
-@app.callback(
-    Output("output-data-upload-multiple", "children"),
-    Input("upload-data-multiple", "list_of_contents"),
-    State("upload-data-multiple", "list_of_filenames"),
-    State("upload-data-multiple", "list_of_last_modified"),
-)
-def update_output_tab_2(list_of_contents, list_of_filenames, list_of_last_modified):
-    if list_of_contents is not None:
-        children = [parse_contents(c) for c in list_of_contents]
-        return children
+# @app.callback(
+#     Output("output-data-upload-multiple", "children"),
+#     Input("upload-data-multiple", "list_of_contents"),
+#     State("upload-data-multiple", "list_of_filenames"),
+#     State("upload-data-multiple", "list_of_last_modified"),
+# )
+# def update_output_tab_2(list_of_contents, list_of_filenames, list_of_last_modified):
+#     if list_of_contents is not None:
+#         children = [parse_contents(c) for c in list_of_contents]
+#         return children
 
 
 if __name__ == "__main__":
