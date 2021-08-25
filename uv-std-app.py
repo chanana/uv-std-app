@@ -117,7 +117,7 @@ def make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips):
                 x=x[leftips[i] : rightips[i]],
                 y=[hm[i]] * fwhm[i],
                 mode="lines",
-                name="peak" + str(i+1),
+                name="peak" + str(i + 1),
             )
         )
     return fig
@@ -136,16 +136,30 @@ def make_sample_info_card(sample_info, filename):
     return info_card
 
 
-def make_data_table(peaks, heights, fwhm):
-    df = pd.DataFrame()
-    df['Parameter'] = ["Position", "Height", "FWHM"]
+def make_data_table(peaks, heights, fwhm, ref_df=None):
+    df = pd.DataFrame(index=["Position", "Height", "FWHM"])
+    df["Parameter"] = ["Position", "Height", "FWHM"]
     for i in range(len(peaks)):
-        df["Peak " + str(i + 1)] = [peaks[i] / 10., heights[i], fwhm[i]]
+        df["Peak " + str(i + 1)] = [peaks[i] / 10.0, heights[i], fwhm[i]]
 
+    if ref_df is None:
+        return df
+    else:
+        new = df.filter(regex="Peak*").to_numpy()  # table of just Peak columns
+        ref = ref_df.filter(regex="Peak*").to_numpy()  # table of reference Peak columns
+        diff = pd.DataFrame(ref - new)  # element-wise difference
+        diff = diff.round(2)
+
+        for i in range(df.shape[0]):
+            for j in range(1, df.shape[1]):
+                print(i,j, df.iloc[i,j], diff.iloc[i, j-1])
+                df.iloc[i,j] = str(df.iloc[i,j]) + "/" + str(diff.iloc[i, j-1])
+                # print(df.iloc[i,j])
+            # df["Peak " + str(i + 1)] = [str(peaks_ref[i]) + "/" + str(diff[i])]
     return df
 
 
-def get_file_contents_and_analyze(content, filename):
+def get_file_contents_and_analyze(content, filename, ref_df=None):
     j = parse_contents(content)
     x = np.array(j["time"][:6000])
     y = np.array(j["intensities"]["254"][:6000])
@@ -157,7 +171,7 @@ def get_file_contents_and_analyze(content, filename):
 
     fig = make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips)
     info_card = make_sample_info_card(sample_info=j, filename=filename)
-    data_table = make_data_table(peaks, heights, fwhm)
+    data_table = make_data_table(peaks, heights, fwhm, ref_df)
 
     return info_card, fig, data_table
 
@@ -170,7 +184,7 @@ def put_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
         dbc.Col(
             dash_table.DataTable(
                 columns=[{"name": i, "id": i} for i in data_table.columns],
-                data=data_table.to_dict('records'),
+                data=data_table.to_dict("records"),
             ),
             width=12,
         ),
@@ -182,25 +196,34 @@ def put_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
 
 @app.callback(
     Output("reference-row", "children"),
+    Output("peak-tables", "data"),
     Input("upload-data", "contents"),
     State("upload-data", "filename"),
 )
 def update_output_tab_1(contents, filename):
     if contents is not None:
         info_card, fig, data_table = get_file_contents_and_analyze(contents, filename)
-        return put_into_html(info_card, fig, data_table)
+        data = {"reference": data_table.to_json(orient="split")}
+        return put_into_html(info_card, fig, data_table), json.dumps(data)
+    else:
+        return [None, None]
 
 
 @app.callback(
     Output("samples-uploaded", "children"),
     Input("upload-data-multiple", "contents"),
+    Input("peak-tables", "data"),
     State("upload-data-multiple", "filename"),
 )
-def update_output_tab_2(contents: list, filename: list) -> list:
+def update_output_tab_2(contents: list, data: str, filename: list) -> list:
     if contents is not None:
         children = []
+        ref_df = json.loads(data)
+        ref_df = pd.read_json(ref_df["reference"], orient="split")
         for content, f in zip(contents, filename):
-            info_card, fig, data_table = get_file_contents_and_analyze(content, f)
+            info_card, fig, data_table = get_file_contents_and_analyze(
+                content, f, ref_df
+            )
             children += put_into_html(info_card, fig, data_table)
 
         return children
