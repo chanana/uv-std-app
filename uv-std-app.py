@@ -138,7 +138,7 @@ def make_sample_info_card(sample_info, filename):
 
 def make_data_table(peaks, heights, fwhm, ref_df=None):
     df = pd.DataFrame(index=["Position", "Height", "FWHM"])
-    df["Parameter"] = ["Position", "Height", "FWHM"]
+    df["Parameter"] = ["Position (s)", "Height", "FWHM (x 10s)"]
     for i in range(len(peaks)):
         df["Peak " + str(i + 1)] = [peaks[i] / 10.0, heights[i], fwhm[i]]
 
@@ -152,10 +152,7 @@ def make_data_table(peaks, heights, fwhm, ref_df=None):
 
         for i in range(df.shape[0]):
             for j in range(1, df.shape[1]):
-                print(i,j, df.iloc[i,j], diff.iloc[i, j-1])
-                df.iloc[i,j] = str(df.iloc[i,j]) + "/" + str(diff.iloc[i, j-1])
-                # print(df.iloc[i,j])
-            # df["Peak " + str(i + 1)] = [str(peaks_ref[i]) + "/" + str(diff[i])]
+                df.iloc[i, j] = str(df.iloc[i, j]) + "/" + str(diff.iloc[i, j - 1])
     return df
 
 
@@ -165,6 +162,7 @@ def get_file_contents_and_analyze(content, filename, ref_df=None):
     y = np.array(j["intensities"]["254"][:6000])
     peaks, heights, fwhm, hm, leftips, rightips = find_peaks_scipy(y)
 
+    heights = np.round(heights, 2)
     fwhm = np.array(np.floor(fwhm), dtype=int)
     leftips = np.array(np.floor(leftips), dtype=int)
     rightips = np.array(np.floor(rightips), dtype=int)
