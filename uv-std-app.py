@@ -138,9 +138,9 @@ def make_sample_info_card(sample_info, filename):
 
 def make_data_table(peaks, heights, fwhm, ref_df=None):
     df = pd.DataFrame(index=["Position", "Height", "FWHM"])
-    df["Parameter"] = ["Position (s)", "Height", "FWHM (x 10s)"]
+    df["Parameter"] = ["Position (s)", "Height", "FWHM"]
     for i in range(len(peaks)):
-        df["Peak " + str(i + 1)] = [peaks[i] / 10.0, heights[i], fwhm[i]]
+        df["Peak " + str(i + 1)] = [peaks[i] / 10.0, heights[i], fwhm[i] / 10.0]
 
     if ref_df is None:
         return df
@@ -174,6 +174,43 @@ def get_file_contents_and_analyze(content, filename, ref_df=None):
     return info_card, fig, data_table
 
 
+def highlight_cells(data_table):
+    # This function is called for every data table that is rendered. If that table is
+    # of the reference sample, then the columns for all of the peaks will be of dtype
+    # numpy.float64. Checking if the first column is float64 is enough to determine if
+    # the table is the reference and thus skip any highlighting.
+    if data_table["Peak 1"].dtype == np.float64:
+        return []
+
+    columns = data_table.filter(regex="Peak*").columns.to_list()
+    rows = data_table.index
+    # This is one big conditional expression https://stackoverflow.com/a/9987533 and
+    # sort of looks like a list comprehension but it's not
+    return [
+        {
+            "if": {
+                "row_index": i,
+                "column_id": col,
+            },
+            "backgroundColor": "#2ECC40",
+            "color": "white",
+        }
+        if str(data_table.loc[row, col]).split("/")[1] == "0.0"
+        else {
+            "if": {
+                "row_index": i,
+                "column_id": col,
+            },
+            "backgroundColor": "#FF4136",
+            "color": "white",
+        }
+        if float(str(data_table.loc[row, col]).split("/")[0]) > 1
+        else {}
+        for col in columns
+        for i, row in enumerate(rows)
+    ]
+
+
 def put_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
     col1 = dbc.Col(info_card, width=width_col_1)
     col2 = dbc.Col(dcc.Graph(figure=figure), width=width_col_2)
@@ -183,6 +220,7 @@ def put_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
             dash_table.DataTable(
                 columns=[{"name": i, "id": i} for i in data_table.columns],
                 data=data_table.to_dict("records"),
+                style_data_conditional=(highlight_cells(data_table)),
             ),
             width=12,
         ),
