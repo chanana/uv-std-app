@@ -18,6 +18,6 @@ def find_peaks_scipy(x, height=None):
     # fwhm = full width at half max (width of the peak at specified height)
     # hm = half max (height at which fwhm was found),
     # leftips, rightips = intersection on x axis for y=hm
-    fwhm, hm, leftips, rightips = peak_widths(x=x, peaks=peaks, rel_height=0.5)
+    fwhm, hm, leftips, rightips = peak_widths(x=x, peaks=peaks, rel_height=0.95)
 
     return peaks, heights, fwhm, hm, leftips, rightips

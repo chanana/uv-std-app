@@ -13,7 +13,17 @@ from dash.dependencies import Input, Output, State
 
 from functions import find_peaks_scipy
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+dash_theme = dbc.themes.SANDSTONE
+plotly_theme = "ggplot2"
+active_tab_style = {
+    # "borderTop": "3px solid #7FDBFF",
+    # "borderLeft": "3px solid #7FDBFF",
+    # "borderRight": "3px solid #7FDBFF",
+    # # 'padding': '6px',
+    # # 'fontWeight': 'bold'
+}
+
+app = dash.Dash(__name__, external_stylesheets=[dash_theme])
 
 tab1 = dbc.Tab(
     label="Reference File",
@@ -46,9 +56,10 @@ tab1 = dbc.Tab(
         html.Div(id="reference-row"),
         dcc.Store(id="peak-tables"),
     ],
+    active_tab_style=active_tab_style,
 )
 
-tab2 = dcc.Tab(
+tab2 = dbc.Tab(
     label="Sample Files",
     id="tab-2",
     children=[
@@ -78,9 +89,10 @@ tab2 = dcc.Tab(
         ),
         html.Div(id="samples-uploaded"),
     ],
+    active_tab_style=active_tab_style,
 )
 
-tab3 = dcc.Tab(
+tab3 = dbc.Tab(
     label="Comparison",
     id="tab-3",
     children=[
@@ -96,8 +108,9 @@ tab3 = dcc.Tab(
             )
         )
     ],
+    active_tab_style=active_tab_style,
 )
-app.layout = dbc.Container(dcc.Tabs(value="tab-1", children=[tab1, tab2, tab3]))
+app.layout = dbc.Container(dbc.Tabs(children=[tab1, tab2, tab3], className="nav-fill"))
 
 
 def parse_contents(contents):
@@ -120,6 +133,7 @@ def make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips):
                 name="peak" + str(i + 1),
             )
         )
+    fig.update_layout(template=plotly_theme)
     return fig
 
 
@@ -174,44 +188,51 @@ def get_file_contents_and_analyze(content, filename, ref_df=None):
     return info_card, fig, data_table
 
 
-def highlight_cells(data_table):
+def highlight_cells(data_table, position_tolerance):
     # This function is called for every data table that is rendered. If that table is
     # of the reference sample, then the columns for all of the peaks will be of dtype
     # numpy.float64. Checking if the first column is float64 is enough to determine if
     # the table is the reference and thus skip any highlighting.
     if data_table["Peak 1"].dtype == np.float64:
-        return []
+        return [{"if": {"row_index": "odd"}, "backgroundColor": "rgb(248, 248, 248)"}]
 
     columns = data_table.filter(regex="Peak*").columns.to_list()
-    rows = data_table.index
+    rows = ["Position"]  # We only have a tolerance on position (for now)
     # This is one big conditional expression https://stackoverflow.com/a/9987533 and
     # sort of looks like a list comprehension but it's not
-    return [
-        {
-            "if": {
-                "row_index": i,
-                "column_id": col,
-            },
-            "backgroundColor": "#2ECC40",
-            "color": "white",
-        }
-        if str(data_table.loc[row, col]).split("/")[1] == "0.0"
-        else {
-            "if": {
-                "row_index": i,
-                "column_id": col,
-            },
-            "backgroundColor": "#FF4136",
-            "color": "white",
-        }
-        if float(str(data_table.loc[row, col]).split("/")[0]) > 1
-        else {}
-        for col in columns
-        for i, row in enumerate(rows)
-    ]
+    return (
+        [
+            {
+                "if": {
+                    "row_index": i,
+                    "column_id": col,
+                },
+                "backgroundColor": "#2ECC40",  # Green
+                "color": "white",
+            }
+            if abs(float(str(data_table.loc[row, col]).split("/")[1]))
+            < position_tolerance
+            else {
+                "if": {
+                    "row_index": i,
+                    "column_id": col,
+                },
+                "backgroundColor": "#FF4136",  # Red
+                "color": "white",
+            }
+            if abs(float(str(data_table.loc[row, col]).split("/")[1]))
+            >= position_tolerance
+            else {}
+            for col in columns
+            for i, row in enumerate(rows)
+        ]
+        + [{"if": {"row_index": "odd"}, "backgroundColor": "rgb(248, 248, 248)"}],
+    )
 
 
-def put_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
+def put_into_html(
+    info_card, figure, data_table, position_tolerance=3, width_col_1=3, width_col_2=9
+):
     col1 = dbc.Col(info_card, width=width_col_1)
     col2 = dbc.Col(dcc.Graph(figure=figure), width=width_col_2)
     row1 = dbc.Row(children=[col1, col2], align="center")
@@ -220,7 +241,13 @@ def put_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
             dash_table.DataTable(
                 columns=[{"name": i, "id": i} for i in data_table.columns],
                 data=data_table.to_dict("records"),
-                style_data_conditional=(highlight_cells(data_table)),
+                style_data_conditional=(
+                    highlight_cells(data_table, position_tolerance)
+                ),
+                style_header={
+                    "backgroundColor": "rgb(230, 230, 230)",
+                    "fontWeight": "bold",
+                },
             ),
             width=12,
         ),
