@@ -1,4 +1,3 @@
-import base64
 import json
 
 import dash
@@ -8,16 +7,17 @@ import dash_html_components as html
 import dash_table
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 from dash.dependencies import Input, Output, State
 
-from functions import find_peaks_scipy
+from constants import ALTERNATE_ROW_HIGHLIGHTING
+from functions import (
+    find_peaks_scipy,
+    make_spectrum_with_picked_peaks,
+    parse_contents,
+    make_sample_info_card,
+)
 
-# Define themes for plotly and dash
-dash_theme = dbc.themes.SANDSTONE
-plotly_theme = "ggplot2"
-
-app = dash.Dash(__name__, external_stylesheets=[dash_theme])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.SANDSTONE])
 
 tab1 = dbc.Tab(
     label="Reference File",
@@ -80,6 +80,7 @@ tab2 = dbc.Tab(
                 ),
             )
         ),
+        html.Div(id="differences-table"),
     ],
 )
 
@@ -92,43 +93,6 @@ tab3 = dbc.Tab(
     ],
 )
 app.layout = dbc.Container(dbc.Tabs(children=[tab1, tab2, tab3], className="nav-fill"))
-
-
-def parse_contents(contents):
-    content_type, content_string = contents.split(",")
-    decoded = base64.b64decode(content_string)
-    j = json.loads(decoded)
-    return j
-
-
-def make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x, y=y, mode="lines", name="original"))
-    fig.add_trace(go.Scatter(x=x[peaks], y=y[peaks], mode="markers", name="peaks"))
-    for i in range(len(hm)):
-        fig.add_trace(
-            go.Scatter(
-                x=x[leftips[i] : rightips[i]],
-                y=[hm[i]] * fwhm[i],
-                mode="lines",
-                name="peak" + str(i + 1),
-            )
-        )
-    fig.update_layout(template=plotly_theme)
-    return fig
-
-
-def make_sample_info_card(sample_info, filename):
-    info_card = dbc.Card(
-        dbc.CardBody(
-            children=[html.P(filename)]
-            + [
-                html.P([html.B(i), ": ", sample_info[i]])
-                for i in ["Sample Name", "Method Name", "Run Date"]
-            ],
-        )
-    )
-    return info_card
 
 
 def make_data_table(peaks, heights, fwhm, ref_df=None):
@@ -178,7 +142,7 @@ def highlight_cells(data_table, position_tolerance):
     # numpy.float64. Checking if the first column is float64 is enough to determine if
     # the table is the reference and thus skip any highlighting.
     if data_table["Peak 1"].dtype == np.float64:
-        return [{"if": {"row_index": "odd"}, "backgroundColor": "rgb(248, 248, 248)"}]
+        return [ALTERNATE_ROW_HIGHLIGHTING]
 
     columns = data_table.filter(regex="Peak*").columns.to_list()
     rows = ["Position"]  # We only have a tolerance on position (for now)
@@ -206,7 +170,7 @@ def highlight_cells(data_table, position_tolerance):
         else {}
         for col in columns
         for i, row in enumerate(rows)
-    ] + [{"if": {"row_index": "odd"}, "backgroundColor": "#f8f8f8"}]
+    ] + [ALTERNATE_ROW_HIGHLIGHTING]
 
 
 def put_into_html(

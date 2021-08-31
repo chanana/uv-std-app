@@ -1,4 +1,10 @@
 from scipy.signal import find_peaks, peak_widths
+import plotly.graph_objects as go
+import base64
+import json
+import dash_bootstrap_components as dbc
+from constants import PLOTLY_THEME
+import dash_html_components as html
 
 
 def find_peaks_scipy(x, height=None):
@@ -14,10 +20,49 @@ def find_peaks_scipy(x, height=None):
         height = 0.1 * max(x)
 
     peaks, heights = find_peaks(x=x, height=height)
-    heights = heights['peak_heights']
+    heights = heights["peak_heights"]
     # fwhm = full width at half max (width of the peak at specified height)
     # hm = half max (height at which fwhm was found),
     # leftips, rightips = intersection on x axis for y=hm
     fwhm, hm, leftips, rightips = peak_widths(x=x, peaks=peaks, rel_height=0.95)
 
     return peaks, heights, fwhm, hm, leftips, rightips
+
+
+def make_spectrum_with_picked_peaks(
+    x, y, peaks, fwhm, hm, leftips, rightips, plotly_theme=PLOTLY_THEME
+):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=x, y=y, mode="lines", name="original"))
+    fig.add_trace(go.Scatter(x=x[peaks], y=y[peaks], mode="markers", name="peaks"))
+    for i in range(len(hm)):
+        fig.add_trace(
+            go.Scatter(
+                x=x[leftips[i] : rightips[i]],
+                y=[hm[i]] * fwhm[i],
+                mode="lines",
+                name="peak" + str(i + 1),
+            )
+        )
+    fig.update_layout(template=plotly_theme)
+    return fig
+
+
+def parse_contents(contents):
+    content_type, content_string = contents.split(",")
+    decoded = base64.b64decode(content_string)
+    j = json.loads(decoded)
+    return j
+
+
+def make_sample_info_card(sample_info, filename):
+    info_card = dbc.Card(
+        dbc.CardBody(
+            children=[html.P(filename)]
+            + [
+                html.P([html.B(i), ": ", sample_info[i]])
+                for i in ["Sample Name", "Method Name", "Run Date"]
+            ],
+        )
+    )
+    return info_card
