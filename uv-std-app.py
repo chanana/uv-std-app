@@ -13,15 +13,9 @@ from dash.dependencies import Input, Output, State
 
 from functions import find_peaks_scipy
 
+# Define themes for plotly and dash
 dash_theme = dbc.themes.SANDSTONE
 plotly_theme = "ggplot2"
-active_tab_style = {
-    # "borderTop": "3px solid #7FDBFF",
-    # "borderLeft": "3px solid #7FDBFF",
-    # "borderRight": "3px solid #7FDBFF",
-    # # 'padding': '6px',
-    # # 'fontWeight': 'bold'
-}
 
 app = dash.Dash(__name__, external_stylesheets=[dash_theme])
 
@@ -56,7 +50,6 @@ tab1 = dbc.Tab(
         html.Div(id="reference-row"),
         dcc.Store(id="peak-tables"),
     ],
-    active_tab_style=active_tab_style,
 )
 
 tab2 = dbc.Tab(
@@ -87,28 +80,16 @@ tab2 = dbc.Tab(
                 ),
             )
         ),
-        html.Div(id="samples-uploaded"),
     ],
-    active_tab_style=active_tab_style,
 )
 
 tab3 = dbc.Tab(
-    label="Comparison",
+    label="Details",
     id="tab-3",
     children=[
-        dbc.Row(
-            dbc.Col(
-                dash_table.DataTable(
-                    id="peak-table",
-                    columns=[
-                        {"name": i, "id": i}
-                        for i in ["Peak #", "Height", "Position", "FWHM"]
-                    ],
-                )
-            )
-        )
+        dbc.Row(dbc.Col()),
+        html.Div(id="samples-uploaded"),
     ],
-    active_tab_style=active_tab_style,
 )
 app.layout = dbc.Container(dbc.Tabs(children=[tab1, tab2, tab3], className="nav-fill"))
 
@@ -159,11 +140,14 @@ def make_data_table(peaks, heights, fwhm, ref_df=None):
     if ref_df is None:
         return df
     else:
-        new = df.filter(regex="Peak*").to_numpy()  # table of just Peak columns
-        ref = ref_df.filter(regex="Peak*").to_numpy()  # table of reference Peak columns
-        diff = pd.DataFrame(ref - new)  # element-wise difference
+        # Filter both current and reference data tables to include only columns with
+        # "Peak" in their name and then take their difference to 2 decimals
+        df_filtered = df.filter(regex="Peak*").to_numpy()
+        ref_df_filtered = ref_df.filter(regex="Peak*").to_numpy()
+        diff = pd.DataFrame(ref_df_filtered - df_filtered)
         diff = diff.round(2)
 
+        # Modify current data table to have <data/diff> for each cell
         for i in range(df.shape[0]):
             for j in range(1, df.shape[1]):
                 df.iloc[i, j] = str(df.iloc[i, j]) + "/" + str(diff.iloc[i, j - 1])
@@ -200,34 +184,29 @@ def highlight_cells(data_table, position_tolerance):
     rows = ["Position"]  # We only have a tolerance on position (for now)
     # This is one big conditional expression https://stackoverflow.com/a/9987533 and
     # sort of looks like a list comprehension but it's not
-    return (
-        [
-            {
-                "if": {
-                    "row_index": i,
-                    "column_id": col,
-                },
-                "backgroundColor": "#2ECC40",  # Green
-                "color": "white",
-            }
-            if abs(float(str(data_table.loc[row, col]).split("/")[1]))
-            < position_tolerance
-            else {
-                "if": {
-                    "row_index": i,
-                    "column_id": col,
-                },
-                "backgroundColor": "#FF4136",  # Red
-                "color": "white",
-            }
-            if abs(float(str(data_table.loc[row, col]).split("/")[1]))
-            >= position_tolerance
-            else {}
-            for col in columns
-            for i, row in enumerate(rows)
-        ]
-        + [{"if": {"row_index": "odd"}, "backgroundColor": "rgb(248, 248, 248)"}],
-    )
+    return [
+        {
+            "if": {
+                "row_index": i,
+                "column_id": col,
+            },
+            "backgroundColor": "#2ECC40",  # Green
+            "color": "white",
+        }
+        if abs(float(str(data_table.loc[row, col]).split("/")[1])) < position_tolerance
+        else {
+            "if": {
+                "row_index": i,
+                "column_id": col,
+            },
+            "backgroundColor": "#FF4136",  # Red
+            "color": "white",
+        }
+        if abs(float(str(data_table.loc[row, col]).split("/")[1])) >= position_tolerance
+        else {}
+        for col in columns
+        for i, row in enumerate(rows)
+    ] + [{"if": {"row_index": "odd"}, "backgroundColor": "#f8f8f8"}]
 
 
 def put_into_html(
