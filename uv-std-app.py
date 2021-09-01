@@ -15,6 +15,7 @@ from functions import (
     make_spectrum_with_picked_peaks,
     parse_contents,
     make_sample_info_card,
+    make_fig_for_diff_tables,
 )
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.SANDSTONE])
@@ -272,9 +273,23 @@ def get_peak_metadata_from_storage(peak_metadata):
     fwhms = fwhms.round(2)
     heights = fwhms.round(2)
 
-    title_row1 = html.H4("Positions")
-    title_row2 = html.H4("FWHMs")
-    title_row3 = html.H4("Heights")
+    title_row1 = html.H4("Positions", className='mt-3 mb-3')
+    title_row2 = html.H4("FWHMs", className='mt-3 mb-3')
+    title_row3 = html.H4("Heights", className='mt-3 mb-3')
+
+    fig_row1 = dbc.Row(
+        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(positions, 3)), width=12),
+        align="center",
+    )
+    fig_row2 = dbc.Row(
+        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(fwhms, 0.1)), width=12),
+        align="center",
+    )
+    fig_row3 = dbc.Row(
+        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(heights, 0.1)), width=12),
+        align="center",
+    )
+
     row1 = dbc.Row(
         dbc.Col(
             dash_table.DataTable(
@@ -311,7 +326,17 @@ def get_peak_metadata_from_storage(peak_metadata):
         ),
         align="center",
     )
-    return [title_row1, row1, title_row2, row2, title_row3, row3]
+    return [
+        title_row1,
+        fig_row1,
+        row1,
+        title_row2,
+        fig_row2,
+        row2,
+        title_row3,
+        fig_row3,
+        row3,
+    ]
 
 
 if __name__ == "__main__":
