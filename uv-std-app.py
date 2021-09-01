@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dash.dependencies import Input, Output, State
 
-from constants import ALTERNATE_ROW_HIGHLIGHTING
+from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
 from functions import (
     find_peaks_scipy,
     make_spectrum_with_picked_peaks,
@@ -80,6 +80,7 @@ tab2 = dbc.Tab(
                 ),
             )
         ),
+        dcc.Store(id="differences-table-storage"),
         html.Div(id="differences-table"),
     ],
 )
@@ -108,14 +109,16 @@ def make_data_table(peaks, heights, fwhm, ref_df=None):
         # "Peak" in their name and then take their difference to 2 decimals
         df_filtered = df.filter(regex="Peak*").to_numpy()
         ref_df_filtered = ref_df.filter(regex="Peak*").to_numpy()
-        diff = pd.DataFrame(ref_df_filtered - df_filtered)
-        diff = diff.round(2)
+        diff = np.around(ref_df_filtered - df_filtered, 2)
+        diff = pd.DataFrame(
+            diff, columns=["Peak " + str(i + 1) for i in range(diff.shape[1])]
+        )
 
         # Modify current data table to have <data/diff> for each cell
         for i in range(df.shape[0]):
             for j in range(1, df.shape[1]):
                 df.iloc[i, j] = str(df.iloc[i, j]) + "/" + str(diff.iloc[i, j - 1])
-    return df
+    return df, diff
 
 
 def get_file_contents_and_analyze(content, filename, ref_df=None):
@@ -131,12 +134,15 @@ def get_file_contents_and_analyze(content, filename, ref_df=None):
 
     fig = make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips)
     info_card = make_sample_info_card(sample_info=j, filename=filename)
-    data_table = make_data_table(peaks, heights, fwhm, ref_df)
+    if ref_df is not None:
+        data_table, differences = make_data_table(peaks, heights, fwhm, ref_df)
+        return info_card, fig, data_table, differences
+    else:
+        data_table = make_data_table(peaks, heights, fwhm, ref_df)
+        return info_card, fig, data_table
 
-    return info_card, fig, data_table
 
-
-def highlight_cells(data_table, position_tolerance):
+def highlight_cells(data_table, position_tolerance=3):
     # This function is called for every data table that is rendered. If that table is
     # of the reference sample, then the columns for all of the peaks will be of dtype
     # numpy.float64. Checking if the first column is float64 is enough to determine if
@@ -187,10 +193,7 @@ def put_into_html(
                 style_data_conditional=(
                     highlight_cells(data_table, position_tolerance)
                 ),
-                style_header={
-                    "backgroundColor": "rgb(230, 230, 230)",
-                    "fontWeight": "bold",
-                },
+                style_header=TABLE_HEADER,
             ),
             width=12,
         ),
@@ -217,22 +220,98 @@ def update_output_tab_1(contents, filename):
 
 @app.callback(
     Output("samples-uploaded", "children"),
+    Output("differences-table-storage", "data"),
     Input("upload-data-multiple", "contents"),
     Input("peak-tables", "data"),
     State("upload-data-multiple", "filename"),
 )
-def update_output_tab_2(contents: list, data: str, filename: list) -> list:
+def update_output_tab_2_and_3(contents: list, data: str, filename: list) -> tuple:
     if contents is not None:
         children = []
+        positions = pd.DataFrame()
+        fwhms = pd.DataFrame()
+        heights = pd.DataFrame()
+
         ref_df = json.loads(data)
         ref_df = pd.read_json(ref_df["reference"], orient="split")
         for content, f in zip(contents, filename):
-            info_card, fig, data_table = get_file_contents_and_analyze(
+            info_card, fig, data_table, diff = get_file_contents_and_analyze(
                 content, f, ref_df
             )
             children += put_into_html(info_card, fig, data_table)
 
-        return children
+            positions = positions.append(diff.iloc[[0]])
+            fwhms = fwhms.append(diff.iloc[[1]])
+            heights = heights.append(diff.iloc[[2]])
+
+        peak_metadata = {
+            "positions": positions.to_json(orient="split"),
+            "fwhms": fwhms.to_json(orient="split"),
+            "heights": heights.to_json(orient="split"),
+        }
+
+        return children, json.dumps(peak_metadata)
+    else:
+        return None, None
+
+
+@app.callback(
+    Output("differences-table", "children"),
+    Input("differences-table-storage", "data"),
+)
+def get_peak_metadata_from_storage(peak_metadata):
+    d = json.loads(peak_metadata)
+    positions = pd.read_json(
+        d["positions"],
+        orient="split",
+    )
+    fwhms = pd.read_json(d["fwhms"], orient="split")
+    heights = pd.read_json(d["heights"], orient="split")
+
+    positions = positions.round(2)
+    fwhms = fwhms.round(2)
+    heights = fwhms.round(2)
+
+    title_row1 = html.H4("Positions")
+    title_row2 = html.H4("FWHMs")
+    title_row3 = html.H4("Heights")
+    row1 = dbc.Row(
+        dbc.Col(
+            dash_table.DataTable(
+                columns=[{"name": i, "id": i} for i in positions.columns],
+                data=positions.to_dict("records"),
+                style_data_conditional=([ALTERNATE_ROW_HIGHLIGHTING]),
+                style_header=TABLE_HEADER,
+            ),
+            width=12,
+        ),
+        align="center",
+    )
+    row2 = dbc.Row(
+        dbc.Col(
+            dash_table.DataTable(
+                columns=[{"name": i, "id": i} for i in fwhms.columns],
+                data=fwhms.to_dict("records"),
+                style_data_conditional=([ALTERNATE_ROW_HIGHLIGHTING]),
+                style_header=TABLE_HEADER,
+            ),
+            width=12,
+        ),
+        align="center",
+    )
+    row3 = dbc.Row(
+        dbc.Col(
+            dash_table.DataTable(
+                columns=[{"name": i, "id": i} for i in heights.columns],
+                data=heights.to_dict("records"),
+                style_data_conditional=([ALTERNATE_ROW_HIGHLIGHTING]),
+                style_header=TABLE_HEADER,
+            ),
+            width=12,
+        ),
+        align="center",
+    )
+    return [title_row1, row1, title_row2, row2, title_row3, row3]
 
 
 if __name__ == "__main__":

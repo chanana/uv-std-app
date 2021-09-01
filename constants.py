@@ -6,3 +6,8 @@ ALTERNATE_ROW_HIGHLIGHTING = {
     "if": {"row_index": "odd"},
     "backgroundColor": "#f8f8f8",
 }
+
+TABLE_HEADER = {
+    "backgroundColor": "rgb(230, 230, 230)",
+    "fontWeight": "bold",
+}

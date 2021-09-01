@@ -1,3 +1,4 @@
+import pandas as pd
 from scipy.signal import find_peaks, peak_widths
 import plotly.graph_objects as go
 import base64
