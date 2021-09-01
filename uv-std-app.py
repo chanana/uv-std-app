@@ -49,7 +49,7 @@ tab1 = dbc.Tab(
             align="center",
         ),
         html.Div(id="reference-row"),
-        dcc.Store(id="peak-tables"),
+        dcc.Store(id="reference-table"),
     ],
 )
 
@@ -80,6 +80,24 @@ tab2 = dbc.Tab(
                     },
                 ),
             )
+        ),
+        dbc.Row(
+            children=[
+                dbc.Col(
+                    [
+                        html.H4("{} Threshold ".format(k)),
+                        dcc.Input(
+                            id="{}-threshold".format(k),
+                            type="number",
+                            placeholder="{} threshold".format(k),
+                            step=0.01,
+                        ),
+                    ],
+                    width=4,
+                )
+                for k in ["position", "fwhm", "height"]
+            ],
+            align="center",
         ),
         dcc.Store(id="differences-table-storage"),
         html.Div(id="differences-table"),
@@ -206,7 +224,7 @@ def put_into_html(
 
 @app.callback(
     Output("reference-row", "children"),
-    Output("peak-tables", "data"),
+    Output("reference-table", "data"),
     Input("upload-data", "contents"),
     State("upload-data", "filename"),
 )
@@ -223,7 +241,7 @@ def update_output_tab_1(contents, filename):
     Output("samples-uploaded", "children"),
     Output("differences-table-storage", "data"),
     Input("upload-data-multiple", "contents"),
-    Input("peak-tables", "data"),
+    Input("reference-table", "data"),
     State("upload-data-multiple", "filename"),
 )
 def update_output_tab_2_and_3(contents: list, data: str, filename: list) -> tuple:
@@ -259,8 +277,9 @@ def update_output_tab_2_and_3(contents: list, data: str, filename: list) -> tupl
 @app.callback(
     Output("differences-table", "children"),
     Input("differences-table-storage", "data"),
+    [Input("{}-threshold".format(i), "value") for i in ["position", "fwhm", "height"]],
 )
-def get_peak_metadata_from_storage(peak_metadata):
+def get_peak_metadata_from_storage(peak_metadata, p, f, h):
     d = json.loads(peak_metadata)
     positions = pd.read_json(
         d["positions"],
@@ -273,20 +292,20 @@ def get_peak_metadata_from_storage(peak_metadata):
     fwhms = fwhms.round(2)
     heights = fwhms.round(2)
 
-    title_row1 = html.H4("Positions", className='mt-3 mb-3')
-    title_row2 = html.H4("FWHMs", className='mt-3 mb-3')
-    title_row3 = html.H4("Heights", className='mt-3 mb-3')
+    title_row1 = html.H4("Positions", className="mt-3 mb-3")
+    title_row2 = html.H4("FWHMs", className="mt-3 mb-3")
+    title_row3 = html.H4("Heights", className="mt-3 mb-3")
 
     fig_row1 = dbc.Row(
-        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(positions, 3)), width=12),
+        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(positions, p)), width=12),
         align="center",
     )
     fig_row2 = dbc.Row(
-        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(fwhms, 0.1)), width=12),
+        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(fwhms, f)), width=12),
         align="center",
     )
     fig_row3 = dbc.Row(
-        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(heights, 0.1)), width=12),
+        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(heights, h)), width=12),
         align="center",
     )
 
@@ -337,6 +356,18 @@ def get_peak_metadata_from_storage(peak_metadata):
         fig_row3,
         row3,
     ]
+
+
+@app.callback(
+    [Output("{}-threshold".format(i), "value") for i in ["position", "fwhm", "height"]],
+    [Input("reference-table", "data")],
+)
+def change_threshold(data):
+    ref_df = json.loads(data)
+    ref_df = pd.read_json(ref_df["reference"], orient="split").drop("Parameter", axis=1)
+    _, f, h = np.round((ref_df.max(axis=1).values / 10.0), 2)
+    p = 3.0
+    return p, f, h
 
 
 if __name__ == "__main__":
