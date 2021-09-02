@@ -85,11 +85,11 @@ tab2 = dbc.Tab(
             children=[
                 dbc.Col(
                     [
-                        html.H4("{} Threshold ".format(k)),
-                        dcc.Input(
+                        html.H5("{} Threshold ".format(k[0].upper() + k[1::])),
+                        dbc.Input(
                             id="{}-threshold".format(k),
                             type="number",
-                            placeholder="{} threshold".format(k),
+                            placeholder="{} threshold".format(k[0].upper() + k[1::]),
                             step=0.01,
                         ),
                     ],
@@ -175,15 +175,6 @@ def highlight_cells(data_table, position_tolerance=3):
     # sort of looks like a list comprehension but it's not
     return [
         {
-            "if": {
-                "row_index": i,
-                "column_id": col,
-            },
-            "backgroundColor": "#2ECC40",  # Green
-            "color": "white",
-        }
-        if abs(float(str(data_table.loc[row, col]).split("/")[1])) < position_tolerance
-        else {
             "if": {
                 "row_index": i,
                 "column_id": col,
