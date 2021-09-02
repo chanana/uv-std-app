@@ -3,12 +3,12 @@ import json
 
 import dash_bootstrap_components as dbc
 import dash_html_components as html
+import dash_table
 import plotly.graph_objects as go
 from scipy.signal import find_peaks, peak_widths
 import numpy as np
-from typing import Optional
 
-from constants import PLOTLY_THEME
+from constants import PLOTLY_THEME, ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
 
 
 def find_peaks_scipy(x, height=None):
@@ -159,3 +159,67 @@ def make_fig_for_diff_tables(df, tolerance):
     )
     fig.update_layout(template=PLOTLY_THEME)
     return fig
+
+
+def make_dash_table_from_dataframe(
+    table,
+    threshold_position=None,
+    threshold_fwhm=None,
+    threshold_height=None,
+    style_data_conditional=None,
+    style_header=TABLE_HEADER,
+):
+    if style_data_conditional is None:
+        style_data_conditional = [ALTERNATE_ROW_HIGHLIGHTING]
+    if (
+        threshold_height is not None
+        and threshold_fwhm is not None
+        and threshold_position is not None
+    ):
+        style_data_conditional = [ALTERNATE_ROW_HIGHLIGHTING] + highlight_cells(
+            table, threshold_position, threshold_fwhm, threshold_height
+        )
+    return dbc.Row(
+        dbc.Col(
+            dash_table.DataTable(
+                columns=[{"name": i, "id": i} for i in table.columns],
+                data=table.to_dict("records"),
+                style_data_conditional=style_data_conditional,
+                style_header=style_header,
+            ),
+            width=12,
+        ),
+        align="center",
+    )
+
+
+def highlight_cells(data_table, threshold_position, threshold_fwhm, threshold_height):
+    columns = data_table.filter(regex="Peak*").columns.to_list()
+
+    # This is one big conditional expression (https://stackoverflow.com/a/9987533) and
+    # sort of looks like a list comprehension but it's not. I've used an additional
+    # helper function to return the various parts of the list to make the code more
+    # readable.
+    return (
+        hightlight_helper(data_table, threshold_position, ["Position"], columns)
+        + hightlight_helper(data_table, threshold_height, ["Height"], columns)
+        + hightlight_helper(data_table, threshold_fwhm, ["FWHM"], columns)
+    )
+
+
+def hightlight_helper(table, threshold, rows, columns):
+    highlight = [
+        {
+            "if": {
+                "column_id": col,
+                "filter_query": '{{Parameter}} contains "{}"'.format(row),
+            },
+            "color": "tomato",
+            "fontWeight": "bold",
+        }
+        if abs(float(str(table.loc[row, col]).split("/")[1])) >= threshold
+        else {}
+        for col in columns
+        for i, row in enumerate(rows)
+    ]
+    return highlight

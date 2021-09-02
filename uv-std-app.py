@@ -1,3 +1,4 @@
+import itertools
 import json
 
 import dash
@@ -9,13 +10,14 @@ import numpy as np
 import pandas as pd
 from dash.dependencies import Input, Output, State
 
-from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
+from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER, THRESHOLD_POSITION
 from functions import (
     find_peaks_scipy,
     make_spectrum_with_picked_peaks,
     parse_contents,
     make_sample_info_card,
     make_fig_for_diff_tables,
+    make_dash_table_from_dataframe,
 )
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.SANDSTONE])
@@ -28,25 +30,14 @@ tab1 = dbc.Tab(
             dbc.Col(
                 dcc.Upload(
                     id="upload-data",
-                    multiple=False,
-                    children=[
-                        "Drag and Drop or ",
-                        html.A("Select a File"),
-                        " to use as a reference file.",
-                    ],
-                    style={
-                        "width": "100%",
-                        "height": "60px",
-                        "lineHeight": "60px",
-                        "borderWidth": "1px",
-                        "borderStyle": "dashed",
-                        "borderRadius": "5px",
-                        "textAlign": "center",
-                    },
+                    children=dbc.Button(
+                        "Upload a reference file", color="primary", block=True
+                    ),
                 ),
                 width=12,
             ),
             align="center",
+            className="mt-3 mb-3",
         ),
         html.Div(id="reference-row"),
         dcc.Store(id="reference-table"),
@@ -62,24 +53,14 @@ tab2 = dbc.Tab(
                 dcc.Upload(
                     id="upload-data-multiple",
                     multiple=True,
-                    children=html.Div(
-                        [
-                            "Add ",
-                            html.A("sample files"),
-                            " to compare with the reference.",
-                        ]
+                    children=dbc.Button(
+                        "Upload files to compare with reference file",
+                        color="primary",
+                        block=True,
                     ),
-                    style={
-                        "width": "100%",
-                        "height": "60px",
-                        "lineHeight": "60px",
-                        "borderWidth": "1px",
-                        "borderStyle": "dashed",
-                        "borderRadius": "5px",
-                        "textAlign": "center",
-                    },
                 ),
-            )
+            ),
+            className="mt-3 mb-3",
         ),
         dbc.Row(
             children=[
@@ -94,10 +75,13 @@ tab2 = dbc.Tab(
                         ),
                     ],
                     width=4,
+                    align="center",
                 )
                 for k in ["position", "fwhm", "height"]
             ],
             align="center",
+            className="mt-3 mb-3",
+            justify="center",
         ),
         dcc.Store(id="differences-table-storage"),
         html.Div(id="differences-table"),
@@ -108,21 +92,20 @@ tab3 = dbc.Tab(
     label="Details",
     id="tab-3",
     children=[
-        dbc.Row(dbc.Col()),
         html.Div(id="samples-uploaded"),
     ],
 )
 app.layout = dbc.Container(dbc.Tabs(children=[tab1, tab2, tab3], className="nav-fill"))
 
 
-def make_data_table(peaks, heights, fwhm, ref_df=None):
+def calculate_ref_table_and_differences(peaks, heights, fwhm, ref_df=None):
     df = pd.DataFrame(index=["Position", "Height", "FWHM"])
-    df["Parameter"] = ["Position (s)", "Height", "FWHM"]
+    df["Parameter"] = ["Position (s)", "Height", "FWHM (s)"]
     for i in range(len(peaks)):
         df["Peak " + str(i + 1)] = [peaks[i] / 10.0, heights[i], fwhm[i] / 10.0]
 
     if ref_df is None:
-        return df
+        diff = None
     else:
         # Filter both current and reference data tables to include only columns with
         # "Peak" in their name and then take their difference to 2 decimals
@@ -153,64 +136,48 @@ def get_file_contents_and_analyze(content, filename, ref_df=None):
 
     fig = make_spectrum_with_picked_peaks(x, y, peaks, fwhm, hm, leftips, rightips)
     info_card = make_sample_info_card(sample_info=j, filename=filename)
-    if ref_df is not None:
-        data_table, differences = make_data_table(peaks, heights, fwhm, ref_df)
-        return info_card, fig, data_table, differences
-    else:
-        data_table = make_data_table(peaks, heights, fwhm, ref_df)
-        return info_card, fig, data_table
+
+    data_table, differences = calculate_ref_table_and_differences(
+        peaks, heights, fwhm, ref_df
+    )
+    return info_card, fig, data_table, differences
 
 
-def highlight_cells(data_table, position_tolerance=3):
-    # This function is called for every data table that is rendered. If that table is
-    # of the reference sample, then the columns for all of the peaks will be of dtype
-    # numpy.float64. Checking if the first column is float64 is enough to determine if
-    # the table is the reference and thus skip any highlighting.
-    if data_table["Peak 1"].dtype == np.float64:
-        return [ALTERNATE_ROW_HIGHLIGHTING]
-
-    columns = data_table.filter(regex="Peak*").columns.to_list()
-    rows = ["Position"]  # We only have a tolerance on position (for now)
-    # This is one big conditional expression https://stackoverflow.com/a/9987533 and
-    # sort of looks like a list comprehension but it's not
-    return [
-        {
-            "if": {
-                "row_index": i,
-                "column_id": col,
-            },
-            "backgroundColor": "#FF4136",  # Red
-            "color": "white",
-        }
-        if abs(float(str(data_table.loc[row, col]).split("/")[1])) >= position_tolerance
-        else {}
-        for col in columns
-        for i, row in enumerate(rows)
-    ] + [ALTERNATE_ROW_HIGHLIGHTING]
-
-
-def put_into_html(
-    info_card, figure, data_table, position_tolerance=3, width_col_1=3, width_col_2=9
-):
+def put_tab_3_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
     col1 = dbc.Col(info_card, width=width_col_1)
     col2 = dbc.Col(dcc.Graph(figure=figure), width=width_col_2)
     row1 = dbc.Row(children=[col1, col2], align="center")
-    row2 = dbc.Row(
-        dbc.Col(
-            dash_table.DataTable(
-                columns=[{"name": i, "id": i} for i in data_table.columns],
-                data=data_table.to_dict("records"),
-                style_data_conditional=(
-                    highlight_cells(data_table, position_tolerance)
-                ),
-                style_header=TABLE_HEADER,
-            ),
-            width=12,
-        ),
-        align="center",
-    )
+    row2 = make_dash_table_from_dataframe(table=data_table)
 
     return [row1, row2]
+
+
+def put_tab_2_into_html(
+    positions, threshold_position, fwhms, threshold_fwhm, heights, threshold_height
+):
+    titles = [
+        html.H4("{}".format(i), className="mt-3 mb-3")
+        for i in ["Positions", "FWHMs", "Heights"]
+    ]
+    figures = [
+        dbc.Row(dbc.Col(dcc.Graph(figure=fig), width=12), align="center")
+        for fig in map(
+            make_fig_for_diff_tables,
+            [positions, fwhms, heights],
+            [threshold_position, threshold_fwhm, threshold_height],
+        )
+    ]
+    tables = [
+        make_dash_table_from_dataframe(table) for table in [positions, fwhms, heights]
+    ]
+
+    # this returns a list consisting of [title[0], figures[0], tables[0], title[1], ...]
+    return [
+        i
+        for i in itertools.chain.from_iterable(
+            itertools.zip_longest(titles, figures, tables)
+        )
+    ]
 
 
 @app.callback(
@@ -221,11 +188,15 @@ def put_into_html(
 )
 def update_output_tab_1(contents, filename):
     if contents is not None:
-        info_card, fig, data_table = get_file_contents_and_analyze(contents, filename)
+        info_card, fig, data_table, diff = get_file_contents_and_analyze(
+            contents, filename
+        )
         data = {"reference": data_table.to_json(orient="split")}
-        return put_into_html(info_card, fig, data_table), json.dumps(data)
-    else:
-        return [None, None]
+        col1 = dbc.Col(info_card, width=3)
+        col2 = dbc.Col(dcc.Graph(figure=fig), width=9)
+        row1 = dbc.Row(children=[col1, col2], align="center")
+        row2 = make_dash_table_from_dataframe(table=data_table)
+        return [row1, row2], json.dumps(data)
 
 
 @app.callback(
@@ -233,9 +204,12 @@ def update_output_tab_1(contents, filename):
     Output("differences-table-storage", "data"),
     Input("upload-data-multiple", "contents"),
     Input("reference-table", "data"),
+    [Input("{}-threshold".format(i), "value") for i in ["position", "fwhm", "height"]],
     State("upload-data-multiple", "filename"),
 )
-def update_output_tab_2_and_3(contents: list, data: str, filename: list) -> tuple:
+def update_output_tab_3(
+    contents, data, threshold_position, threshold_fwhm, threshold_height, filename
+):
     if contents is not None:
         children = []
         positions = pd.DataFrame()
@@ -248,7 +222,17 @@ def update_output_tab_2_and_3(contents: list, data: str, filename: list) -> tupl
             info_card, fig, data_table, diff = get_file_contents_and_analyze(
                 content, f, ref_df
             )
-            children += put_into_html(info_card, fig, data_table)
+            col1 = dbc.Col(info_card, width=3)
+            col2 = dbc.Col(dcc.Graph(figure=fig), width=9)
+            row1 = dbc.Row(children=[col1, col2], align="center")
+            row2 = make_dash_table_from_dataframe(
+                table=data_table,
+                threshold_position=threshold_position,
+                threshold_fwhm=threshold_fwhm,
+                threshold_height=threshold_height,
+            )
+
+            children += [row1, row2]
 
             positions = positions.append(diff.iloc[[0]])
             fwhms = fwhms.append(diff.iloc[[1]])
@@ -261,8 +245,6 @@ def update_output_tab_2_and_3(contents: list, data: str, filename: list) -> tupl
         }
 
         return children, json.dumps(peak_metadata)
-    else:
-        return None, None
 
 
 @app.callback(
@@ -270,95 +252,38 @@ def update_output_tab_2_and_3(contents: list, data: str, filename: list) -> tupl
     Input("differences-table-storage", "data"),
     [Input("{}-threshold".format(i), "value") for i in ["position", "fwhm", "height"]],
 )
-def get_peak_metadata_from_storage(peak_metadata, p, f, h):
-    d = json.loads(peak_metadata)
+def get_peak_metadata_from_storage(
+    metadata, threshold_position, threshold_fwhm, threshold_height
+):
+    metadata = json.loads(metadata)
     positions = pd.read_json(
-        d["positions"],
+        metadata["positions"],
         orient="split",
     )
-    fwhms = pd.read_json(d["fwhms"], orient="split")
-    heights = pd.read_json(d["heights"], orient="split")
+    fwhms = pd.read_json(metadata["fwhms"], orient="split")
+    heights = pd.read_json(metadata["heights"], orient="split")
 
     positions = positions.round(2)
     fwhms = fwhms.round(2)
-    heights = fwhms.round(2)
+    heights = heights.round(2)
 
-    title_row1 = html.H4("Positions", className="mt-3 mb-3")
-    title_row2 = html.H4("FWHMs", className="mt-3 mb-3")
-    title_row3 = html.H4("Heights", className="mt-3 mb-3")
-
-    fig_row1 = dbc.Row(
-        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(positions, p)), width=12),
-        align="center",
+    return put_tab_2_into_html(
+        positions, threshold_position, fwhms, threshold_fwhm, heights, threshold_height
     )
-    fig_row2 = dbc.Row(
-        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(fwhms, f)), width=12),
-        align="center",
-    )
-    fig_row3 = dbc.Row(
-        dbc.Col(dcc.Graph(figure=make_fig_for_diff_tables(heights, h)), width=12),
-        align="center",
-    )
-
-    row1 = dbc.Row(
-        dbc.Col(
-            dash_table.DataTable(
-                columns=[{"name": i, "id": i} for i in positions.columns],
-                data=positions.to_dict("records"),
-                style_data_conditional=([ALTERNATE_ROW_HIGHLIGHTING]),
-                style_header=TABLE_HEADER,
-            ),
-            width=12,
-        ),
-        align="center",
-    )
-    row2 = dbc.Row(
-        dbc.Col(
-            dash_table.DataTable(
-                columns=[{"name": i, "id": i} for i in fwhms.columns],
-                data=fwhms.to_dict("records"),
-                style_data_conditional=([ALTERNATE_ROW_HIGHLIGHTING]),
-                style_header=TABLE_HEADER,
-            ),
-            width=12,
-        ),
-        align="center",
-    )
-    row3 = dbc.Row(
-        dbc.Col(
-            dash_table.DataTable(
-                columns=[{"name": i, "id": i} for i in heights.columns],
-                data=heights.to_dict("records"),
-                style_data_conditional=([ALTERNATE_ROW_HIGHLIGHTING]),
-                style_header=TABLE_HEADER,
-            ),
-            width=12,
-        ),
-        align="center",
-    )
-    return [
-        title_row1,
-        fig_row1,
-        row1,
-        title_row2,
-        fig_row2,
-        row2,
-        title_row3,
-        fig_row3,
-        row3,
-    ]
 
 
 @app.callback(
     [Output("{}-threshold".format(i), "value") for i in ["position", "fwhm", "height"]],
     [Input("reference-table", "data")],
 )
-def change_threshold(data):
+def calculate_thresholds(data):
     ref_df = json.loads(data)
     ref_df = pd.read_json(ref_df["reference"], orient="split").drop("Parameter", axis=1)
-    _, f, h = np.round((ref_df.max(axis=1).values / 10.0), 2)
-    p = 3.0
-    return p, f, h
+    _, threshold_fwhm, threshold_height = np.round(
+        (ref_df.max(axis=1).values / 10.0), 2
+    )
+    threshold_position = THRESHOLD_POSITION
+    return threshold_position, threshold_height, threshold_fwhm
 
 
 if __name__ == "__main__":
