@@ -163,22 +163,25 @@ def make_fig_for_diff_tables(df, tolerance):
 
 def make_dash_table_from_dataframe(
     table,
+    with_slash=None,
+    threshold=None,
     threshold_position=None,
     threshold_fwhm=None,
     threshold_height=None,
     style_data_conditional=None,
     style_header=TABLE_HEADER,
 ):
-    if style_data_conditional is None:
+    if with_slash == 1:  # for table in tab 1
         style_data_conditional = [ALTERNATE_ROW_HIGHLIGHTING]
-    if (
-        threshold_height is not None
-        and threshold_fwhm is not None
-        and threshold_position is not None
-    ):
+    elif with_slash == 3:  # for tables in tab 3
         style_data_conditional = [ALTERNATE_ROW_HIGHLIGHTING] + highlight_cells(
             table, threshold_position, threshold_fwhm, threshold_height
         )
+    elif with_slash == 2:  # for tables in tab 2
+        style_data_conditional = [
+            ALTERNATE_ROW_HIGHLIGHTING
+        ] + highlight_cells_without_slash(table, threshold)
+
     return dbc.Row(
         dbc.Col(
             dash_table.DataTable(
@@ -193,17 +196,17 @@ def make_dash_table_from_dataframe(
     )
 
 
-def highlight_cells(data_table, threshold_position, threshold_fwhm, threshold_height):
-    columns = data_table.filter(regex="Peak*").columns.to_list()
+def highlight_cells(table, threshold_position, threshold_fwhm, threshold_height):
+    columns = table.filter(regex="Peak*").columns.to_list()
 
     # This is one big conditional expression (https://stackoverflow.com/a/9987533) and
     # sort of looks like a list comprehension but it's not. I've used an additional
     # helper function to return the various parts of the list to make the code more
     # readable.
     return (
-        hightlight_helper(data_table, threshold_position, ["Position"], columns)
-        + hightlight_helper(data_table, threshold_height, ["Height"], columns)
-        + hightlight_helper(data_table, threshold_fwhm, ["FWHM"], columns)
+        hightlight_helper(table, threshold_position, ["Position"], columns)
+        + hightlight_helper(table, threshold_height, ["Height"], columns)
+        + hightlight_helper(table, threshold_fwhm, ["FWHM"], columns)
     )
 
 
@@ -221,5 +224,24 @@ def hightlight_helper(table, threshold, rows, columns):
         else {}
         for col in columns
         for i, row in enumerate(rows)
+    ]
+
+    return highlight
+
+
+def highlight_cells_without_slash(table, threshold):
+    highlight = [
+        {
+            "if": {
+                "column_id": col,
+                "row_index": r,
+            },
+            "color": "tomato",
+            "fontWeight": "bold",
+        }
+        if abs(float(table.iloc[r, c])) >= threshold
+        else {}
+        for c, col in enumerate(table.columns)
+        for r, row in enumerate(table.index)
     ]
     return highlight

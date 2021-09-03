@@ -143,13 +143,14 @@ def get_file_contents_and_analyze(content, filename, ref_df=None):
     return info_card, fig, data_table, differences
 
 
-def put_tab_3_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
-    col1 = dbc.Col(info_card, width=width_col_1)
-    col2 = dbc.Col(dcc.Graph(figure=figure), width=width_col_2)
-    row1 = dbc.Row(children=[col1, col2], align="center")
-    row2 = make_dash_table_from_dataframe(table=data_table)
-
-    return [row1, row2]
+# def put_tab_3_into_html(info_card, figure, data_table, width_col_1=3, width_col_2=9):
+#     col1 = dbc.Col(info_card, width=width_col_1)
+#     col2 = dbc.Col(dcc.Graph(figure=figure), width=width_col_2)
+#     row1 = dbc.Row(children=[col1, col2], align="center")
+#     row2 = make_dash_table_from_dataframe(table=data_table, with_slash=3)
+#     print(row2)
+#
+#     return [row1, row2]
 
 
 def put_tab_2_into_html(
@@ -168,7 +169,13 @@ def put_tab_2_into_html(
         )
     ]
     tables = [
-        make_dash_table_from_dataframe(table) for table in [positions, fwhms, heights]
+        table
+        for table in map(
+            make_dash_table_from_dataframe,
+            [positions, fwhms, heights],  # table value
+            [2, 2, 2],  # with_slash value
+            [threshold_position, threshold_fwhm, threshold_height],  # threshold value
+        )
     ]
 
     # this returns a list consisting of [title[0], figures[0], tables[0], title[1], ...]
@@ -195,7 +202,7 @@ def update_output_tab_1(contents, filename):
         col1 = dbc.Col(info_card, width=3)
         col2 = dbc.Col(dcc.Graph(figure=fig), width=9)
         row1 = dbc.Row(children=[col1, col2], align="center")
-        row2 = make_dash_table_from_dataframe(table=data_table)
+        row2 = make_dash_table_from_dataframe(table=data_table, with_slash=1)
         return [row1, row2], json.dumps(data)
 
 
@@ -227,6 +234,7 @@ def update_output_tab_3(
             row1 = dbc.Row(children=[col1, col2], align="center")
             row2 = make_dash_table_from_dataframe(
                 table=data_table,
+                with_slash=3,
                 threshold_position=threshold_position,
                 threshold_fwhm=threshold_fwhm,
                 threshold_height=threshold_height,
@@ -287,4 +295,5 @@ def calculate_thresholds(data):
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    # app.run_server(debug=True)
+    app.run_server()
