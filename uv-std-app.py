@@ -9,7 +9,7 @@ import pandas as pd
 from dash.dependencies import Input, Output, State
 
 from constants import THRESHOLD_POSITION
-from functions import (
+from html_functions import (
     put_tab_2_into_html,
     make_dash_table_from_dataframe,
     get_file_contents_and_analyze,

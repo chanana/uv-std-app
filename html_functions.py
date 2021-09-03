@@ -6,89 +6,19 @@ import dash_bootstrap_components as dbc
 import dash_html_components as html
 import dash_core_components as dcc
 import dash_table
-import plotly.graph_objects as go
-from scipy.signal import find_peaks, peak_widths
 import numpy as np
 import pandas as pd
 
-from constants import PLOTLY_THEME, ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
-
-
-def find_peaks_scipy(x, height=None):
-    """Find peaks in given 1D vector
-
-    Args:
-        x (numpy.ndarray): 1D vector of the y values of a waveform
-        height ([float], optional): The minimum height required to be considered a
-        peak. If no height is specified, it is taken as 10% of the maximum value in x.
-        Defaults to None.
-
-    Returns:
-        tuple of the following:
-            fwhm = full width at half max (width of the peak at specified height)
-            hm = half max (height at which fwhm was found),
-            leftips, rightips = intersection on x axis for y=hm
-        see scipy.signal.peak_widths docstring for more information
-    """
-    if height is None:
-        height = 0.1 * max(x)
-
-    peaks, heights = find_peaks(x=x, height=height)
-    heights = heights["peak_heights"]
-    #
-    fwhm, hm, leftips, rightips = peak_widths(x=x, peaks=peaks)
-
-    return peaks, heights, fwhm, hm, leftips, rightips
-
-
-def make_spectrum_with_picked_peaks(
-    x,
-    y,
-    peaks,
-    fwhm,
-    hm,
-    leftips,
-    rightips,
-    plotly_theme=PLOTLY_THEME,
-):
-    """Make a plotly figure from peak parameters
-
-    Args:
-        x (numpy.ndarray): 1D vector of the x values of a waveform
-        y (numpy.ndarray): 1D vector of the x values of a waveform
-        peaks (numpy.ndarray): 1D vector of peaks from waveform
-        fwhm (numpy.ndarray): 1D vector of full-width-at-half-maxima values
-        hm (numpy.ndarray): 1D vector of the heights of the fwhm array
-        leftips (numpy.ndarray): Interpolated positions of left intersection points
-            of a horizontal line at the respective evaluation height
-        rightips (numpy.ndarray): same as leftips except on the right side
-        plotly_theme (str): theme for plotly. If none specified, default of "ggplot" is
-            used
-
-    Returns:
-        go.Figure
-    """
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x, y=y, mode="lines", name="original"))
-    fig.add_trace(go.Scatter(x=x[peaks], y=y[peaks], mode="markers", name="peaks"))
-    for i in range(len(hm)):
-        fig.add_trace(
-            go.Scatter(
-                x=x[leftips[i] : rightips[i]],
-                y=[hm[i]] * fwhm[i],
-                mode="lines",
-                name="peak" + str(i + 1),
-            )
-        )
-    fig.update_layout(template=plotly_theme)
-    return fig
+from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
+from analytical_functions import calculate_ref_table_and_differences, find_peaks_scipy
+from figure_functions import make_spectrum_with_picked_peaks, make_fig_for_diff_tables
 
 
 def parse_contents(contents):
     """Parse contents of uploaded file to json-string
 
     Args:
-        contents (str): contents of the uploaded file
+        contents (str): contents of an uploaded file
 
     Returns:
         json-decoded string of contents
@@ -99,32 +29,17 @@ def parse_contents(contents):
     return j
 
 
-def calculate_ref_table_and_differences(peaks, heights, fwhm, ref_df=None):
-    df = pd.DataFrame(index=["Position", "Height", "FWHM"])
-    df["Parameter"] = ["Position (s)", "Height", "FWHM (s)"]
-    for i in range(len(peaks)):
-        df["Peak " + str(i + 1)] = [peaks[i] / 10.0, heights[i], fwhm[i] / 10.0]
-
-    if ref_df is None:
-        diff = None
-    else:
-        # Filter both current and reference data tables to include only columns with
-        # "Peak" in their name and then take their difference to 2 decimals
-        df_filtered = df.filter(regex="Peak*").to_numpy()
-        ref_df_filtered = ref_df.filter(regex="Peak*").to_numpy()
-        diff = np.around(ref_df_filtered - df_filtered, 2)
-        diff = pd.DataFrame(
-            diff, columns=["Peak " + str(i + 1) for i in range(diff.shape[1])]
-        )
-
-        # Modify current data table to have <data/diff> for each cell
-        for i in range(df.shape[0]):
-            for j in range(1, df.shape[1]):
-                df.iloc[i, j] = str(df.iloc[i, j]) + "/" + str(diff.iloc[i, j - 1])
-    return df, diff
-
-
 def get_file_contents_and_analyze(content, filename, ref_df=None):
+    """Generate dash components from peak, sample info
+
+    Args:
+        content (str): contents of an uploaded file
+        filename (str): name of an uploaded file
+        ref_df (pd.DataFrame): reference sample data
+
+    Returns: tuple of sample information as html, plotly figure, dataframe of sample,
+        dataframe of difference between reference and sample
+    """
     j = parse_contents(content)
     x = np.array(j["time"][:6000])
     y = np.array(j["intensities"]["254"][:6000])
@@ -147,6 +62,23 @@ def get_file_contents_and_analyze(content, filename, ref_df=None):
 def put_tab_2_into_html(
     positions, threshold_position, fwhms, threshold_fwhm, heights, threshold_height
 ):
+    """Convert differences between samples and reference into dash html for tab 2
+
+    Args:
+        positions (pd.DataFrame): table of differences in peak positions for all samples
+            compared to reference
+        threshold_position (float): max absolute deviation allowed for position
+        fwhms (pd.DataFrame): table of differences in peak Full-width-at half-maximums
+            for all samples compared to reference
+        threshold_fwhm (float): max absolute deviation allowed for FWHM
+        heights (pd.DataFrame): table of differences in peak heights for all samples
+            compared to reference
+        threshold_height (float): max absolute deviation allowed for height
+
+    Returns:
+        list of dash html components consisting of a title, figure, and table of differences
+        for all samples
+    """
     titles = [
         html.H4("{}".format(i), className="mt-3 mb-3")
         for i in ["Positions", "FWHMs", "Heights"]
@@ -199,48 +131,6 @@ def make_sample_info_card(sample_info, filename):
         )
     )
     return info_card
-
-
-def make_fig_for_diff_tables(df, tolerance):
-    """Makes plotly figure for visualizing the differences with tolerances
-
-    Args:
-        df (pd.DataFrame): dataframe to be visualized
-        tolerance (float): tolerance associated with that dataframe
-
-    Returns:
-        plotly figure
-    """
-    fig = go.Figure()
-    for i in range(df.shape[0]):
-        fig.add_trace(
-            go.Scatter(
-                x=df.columns,
-                y=df.iloc[i, :].values,
-                name="Sample " + str(i + 1),
-                mode="lines+markers",
-            )
-        )
-    fig.add_trace(
-        go.Scatter(
-            x=df.columns,
-            y=[tolerance] * len(df.columns),
-            name="upper limit",
-            mode="lines",
-            line=dict(color="firebrick", width=2, dash="dash"),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df.columns,
-            y=[-tolerance] * len(df.columns),
-            name="lower limit",
-            mode="lines",
-            line=dict(color="firebrick", width=2, dash="dash"),
-        )
-    )
-    fig.update_layout(template=PLOTLY_THEME)
-    return fig
 
 
 def make_dash_table_from_dataframe(
