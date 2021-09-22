@@ -43,7 +43,7 @@ def get_file_contents_and_analyze(content, filename, ref_df=None):
     j = parse_contents(content)
     x = np.array(j["time"][:6000])
     y = np.array(j["intensities"]["254"][:6000])
-    peaks, heights, fwhm, hm, leftips, rightips = find_peaks_scipy(y)
+    peaks, heights, fwhm, hm, leftips, rightips = find_peaks_scipy(y, height=0.1)
 
     heights = np.round(heights, 2)
     fwhm = np.array(np.floor(fwhm), dtype=int)
