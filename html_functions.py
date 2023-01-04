@@ -5,8 +5,8 @@ import json
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
-import dash_table
 import numpy as np
+from dash import dash_table
 
 from analytical_functions import calculate_ref_table_and_differences, find_peaks_scipy
 from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
@@ -75,8 +75,8 @@ def put_tab_2_into_html(
         threshold_height (float): max absolute deviation allowed for height
 
     Returns:
-        list of dash html components consisting of a title, figure, and table of differences
-        for all samples
+        list of dash html components consisting of a title, figure, and table of
+        differences for all samples
     """
     titles = [
         html.H4("{}".format(i), className="mt-3 mb-3")
