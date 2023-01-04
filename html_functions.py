@@ -1,17 +1,16 @@
 import base64
-import json
 import itertools
+import json
 
 import dash_bootstrap_components as dbc
-import dash_html_components as html
 import dash_core_components as dcc
+import dash_html_components as html
 import dash_table
 import numpy as np
-import pandas as pd
 
-from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
 from analytical_functions import calculate_ref_table_and_differences, find_peaks_scipy
-from figure_functions import make_spectrum_with_picked_peaks, make_fig_for_diff_tables
+from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
+from figure_functions import make_fig_for_diff_tables, make_spectrum_with_picked_peaks
 
 
 def parse_contents(contents):
