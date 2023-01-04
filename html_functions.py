@@ -3,10 +3,8 @@ import itertools
 import json
 
 import dash_bootstrap_components as dbc
-import dash_core_components as dcc
-import dash_html_components as html
 import numpy as np
-from dash import dash_table
+from dash import dash_table, dcc, html
 
 from analytical_functions import calculate_ref_table_and_differences, find_peaks_scipy
 from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
