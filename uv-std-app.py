@@ -29,14 +29,12 @@ tab1 = dbc.Tab(
             dbc.Col(
                 dcc.Upload(
                     id="upload-data",
-                    children=dbc.Button(
-                        "Upload a reference file", color="primary", block=True
-                    ),
+                    children=dbc.Button("Upload a reference file", color="primary"),
                 ),
                 width=12,
             ),
             align="center",
-            className="mt-3 mb-3",
+            className="mt-3 mb-3 d-grid gap-2",
         ),
         html.Div(id="reference-row"),
         dcc.Store(id="reference-table"),
@@ -56,11 +54,11 @@ tab2 = dbc.Tab(
                     children=dbc.Button(
                         "Upload files to compare with reference file",
                         color="primary",
-                        block=True,
+                        # block=True,
                     ),
                 ),
             ),
-            className="mt-3 mb-3",
+            className="mt-3 mb-3 d-grid gap-2",
         ),
         dbc.Row(
             children=[
