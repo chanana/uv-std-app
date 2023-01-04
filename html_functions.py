@@ -1,17 +1,14 @@
 import base64
-import json
 import itertools
+import json
 
 import dash_bootstrap_components as dbc
-import dash_html_components as html
-import dash_core_components as dcc
-import dash_table
 import numpy as np
-import pandas as pd
+from dash import dash_table, dcc, html
 
-from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
 from analytical_functions import calculate_ref_table_and_differences, find_peaks_scipy
-from figure_functions import make_spectrum_with_picked_peaks, make_fig_for_diff_tables
+from constants import ALTERNATE_ROW_HIGHLIGHTING, TABLE_HEADER
+from figure_functions import make_fig_for_diff_tables, make_spectrum_with_picked_peaks
 
 
 def parse_contents(contents):
@@ -76,8 +73,8 @@ def put_tab_2_into_html(
         threshold_height (float): max absolute deviation allowed for height
 
     Returns:
-        list of dash html components consisting of a title, figure, and table of differences
-        for all samples
+        list of dash html components consisting of a title, figure, and table of
+        differences for all samples
     """
     titles = [
         html.H4("{}".format(i), className="mt-3 mb-3")

@@ -1,4 +1,5 @@
 import plotly.graph_objects as go
+
 from constants import PLOTLY_THEME
 
 

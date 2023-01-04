@@ -2,17 +2,16 @@ import json
 
 import dash
 import dash_bootstrap_components as dbc
-import dash_core_components as dcc
-import dash_html_components as html
 import numpy as np
 import pandas as pd
+from dash import dcc, html
 from dash.dependencies import Input, Output, State
 
 from constants import THRESHOLD_POSITION
 from html_functions import (
-    put_tab_2_into_html,
-    make_dash_table_from_dataframe,
     get_file_contents_and_analyze,
+    make_dash_table_from_dataframe,
+    put_tab_2_into_html,
 )
 
 app = dash.Dash(
@@ -30,14 +29,12 @@ tab1 = dbc.Tab(
             dbc.Col(
                 dcc.Upload(
                     id="upload-data",
-                    children=dbc.Button(
-                        "Upload a reference file", color="primary", block=True
-                    ),
+                    children=dbc.Button("Upload a reference file", color="primary"),
                 ),
                 width=12,
             ),
             align="center",
-            className="mt-3 mb-3",
+            className="mt-3 mb-3 d-grid gap-2",
         ),
         html.Div(id="reference-row"),
         dcc.Store(id="reference-table"),
@@ -57,11 +54,11 @@ tab2 = dbc.Tab(
                     children=dbc.Button(
                         "Upload files to compare with reference file",
                         color="primary",
-                        block=True,
+                        # block=True,
                     ),
                 ),
             ),
-            className="mt-3 mb-3",
+            className="mt-3 mb-3 d-grid gap-2",
         ),
         dbc.Row(
             children=[
